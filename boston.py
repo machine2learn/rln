@@ -34,12 +34,9 @@ n_hidden_1 = 179 # 1st layer number of neurons
 n_hidden_2 = 31 # 2nd layer number of neurons
 n_hidden_3 = 5
 n_input = 1000+13 # MNIST data input (img shape: 28*28)
-n_classes = 1 # MNIST total classes (0-9 digits)
+n_classes = INPUT_DIM # MNIST total classes (0-9 digits)
 avg_reg = -10
 rln_lr = np.power(10,6)
-
-# x_train, y_train = balanced_subsample(x_train, y_train.reshape(-1))
-# y_train = y_train.reshape(-1,1)
 
 
 in_epoch = int(round(x_train.shape[0]/BATCH_SIZE))
@@ -62,11 +59,11 @@ biases = {
 }
 
 lambdas = {
-    'h1': tf.Variable(avg_reg*tf.ones([n_input, n_hidden_1]))
+    'h1': tf.Variable(avg_reg*tf.ones([n_input, n_hidden_1])),
 }
 
 rts =  {
-    'h1': tf.Variable(tf.zeros([n_input, n_hidden_1]))
+    'h1': tf.Variable(tf.zeros([n_input, n_hidden_1])),
 }
 
 
@@ -115,7 +112,9 @@ def rln(prev_weights, weights, lambdas, rts, rln_lr, avg_reg, norm=1):
 
 
     return ops
-
+# l1_regularizer = tf.contrib.layers.l1_regularizer(
+#    scale=0.1, scope=None
+# )
 
 # Construct model
 logits = multilayer_perceptron(x)
@@ -125,6 +124,7 @@ prev_weights = {key: value+0 for (key,value) in weights.items()} #+0, little hac
 with tf.control_dependencies([v for v in prev_weights.values()]): #We need to ensure prev_weights is computed befor the optimization
     # Define loss and optimizer
     loss = tf.losses.mean_squared_error(y, logits)
+   # loss += tf.contrib.layers.apply_regularization(l1_regularizer,[weights['h1']])
 
     optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate)
     train_op = optimizer.minimize(loss)

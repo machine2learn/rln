@@ -9,40 +9,6 @@ from sklearn.metrics import roc_auc_score
 from sklearn.preprocessing import normalize
 
 
-def balanced_subsample(x,y,subsample_size=1.0):
-
-    class_xs = []
-    min_elems = None
-
-    for yi in np.unique(y):
-        elems = x[(y == yi)]
-        class_xs.append((yi, elems))
-        if min_elems == None or elems.shape[0] < min_elems:
-            min_elems = elems.shape[0]
-
-    use_elems = min_elems
-    if subsample_size < 1:
-        use_elems = int(min_elems*subsample_size)
-
-    xs = []
-    ys = []
-
-    for ci,this_xs in class_xs:
-        if len(this_xs) > use_elems:
-            np.random.shuffle(this_xs)
-
-        x_ = this_xs[:use_elems]
-        y_ = np.empty(use_elems)
-        y_.fill(ci)
-
-        xs.append(x_)
-        ys.append(y_)
-
-    xs = np.concatenate(xs)
-    ys = np.concatenate(ys)
-
-    return xs,ys
-
 BATCH_SIZE=128
 EPOCHS = 400
 learning_rate = 0.001
@@ -57,7 +23,8 @@ n_input = 369 # MNIST data input (img shape: 28*28)
 n_classes = 1 # MNIST total classes (0-9 digits)
 avg_reg = -12
 rln_lr = np.power(10,6)
-data = normalize(data,axis=0)
+
+data = normalize(data,axis=0) 
 
 labels = labels.reshape(-1,1).astype(np.float32)
 x_train, x_test, y_train, y_test = model_selection.train_test_split(data,labels, test_size=0.3, random_state=5, stratify=labels)
