@@ -114,14 +114,12 @@ def rln(prev_weights, weights, lambdas, rts, rln_lr, avg_reg, norm=2):
 # Construct model
 logits = multilayer_perceptron(x)
 
-prev_weights = {key: value + 0 for (key, value) in
-                weights.items()}  # +0, little hack since tf.identity still returns a reference, could use tf.assign though
+prev_weights = {key: value + 0 for (key, value) in weights.items()}
+# +0, little hack since tf.identity still returns a reference, could use tf.assign though
 
 with tf.control_dependencies(
-        [v for v in prev_weights.values()]):  # We need to ensure prev_weights is computed befor the optimization
-    # Define loss and optimizer
-    loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
-        logits=logits, labels=y))
+        prev_weights.values()):  # We need to ensure prev_weights is computed befor the optimization
+    loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=logits, labels=y))
 
     optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
     train_op = optimizer.minimize(loss)
@@ -141,11 +139,10 @@ with tf.Session() as sess:
         idxs = np.arange(len(x_train))
         np.random.shuffle(idxs)
         idxs = np.array_split(idxs, in_epoch)
-        for j in range(len(idxs)):
-            sess.run(updates, feed_dict={x: x_train[idxs[j]], y: y_train[idxs[j]]})
+        for j in idxs:
+            sess.run(updates, feed_dict={x: x_train[j], y: y_train[j]})
 
-            loss_value, accuracy_value = sess.run([loss, accuracy],
-                                                  feed_dict={x: x_train[idxs[j]], y: y_train[idxs[j]]})
+            loss_value, accuracy_value = sess.run([loss, accuracy], feed_dict={x: x_train[j], y: y_train[j]})
 
             train_loss.append(loss_value)
             train_acc.append(accuracy_value)
@@ -154,9 +151,9 @@ with tf.Session() as sess:
         idxs = np.arange(len(x_test))
         idxs = np.array_split(idxs, int(round(x_test.shape[0] / BATCH_SIZE)))
         pred = []
-        for j in range(len(idxs)):
-            loss_value, accuracy_value, p = sess.run([loss, accuracy, predicted],
-                                                     feed_dict={x: x_test[idxs[j]], y: y_test[idxs[j]]})
+        for j in idxs:
+            _, _, p = sess.run([loss, accuracy, predicted],
+                                                     feed_dict={x: x_test[j], y: y_test[j]})
             pred.append(p.squeeze())
         pred = np.concatenate(pred, axis=0)
         #  pred = np.round(pred)
