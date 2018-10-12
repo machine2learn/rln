@@ -36,8 +36,10 @@ class RLN(tf.keras.layers.Layer):
     def __init__(self, output_units):
         super().__init__()
         self.output_units = output_units
-        self.thetat = 0.7
+        self.theta = -8
         self.norm = 2
+        self.etha = 0.01
+        self.mu = 10e6
 
     def build(self, input_shape):
         self.kernel = self.add_variable(
@@ -46,31 +48,46 @@ class RLN(tf.keras.layers.Layer):
         self.bias = self.add_variable('bias', [self.output_units])
 
         self.lambdas = self.add_weight(name='lambdas',
-                                       shape=(self.output_units),
+                                       shape=([self.output_units]),
                                        initializer='he_normal',
                                        trainable=False)
 
         self.rs = self.add_weight(name='rs',
-                                  shape=(self.output_units),
+                                  shape=([self.output_units]),
                                   initializer='zeros',
                                   trainable=False)
 
-        self.prev = self.add_variable(
-            "prev_kernel", [int(input_shape[-1]), self.output_units])
+        self.prev = self.add_weight(name='prev_kernel',
+                                    shape=[int(input_shape[-1]), self.output_units],
+                                    initializer='zeros',
+                                    trainable=False)
+
+        self.first_time = False
 
     def call(self, input, **kwargs):
-        g = self.kernel - self.prev
+        if self.first_time:
+            g = self.kernel - self.prev
 
-        norms_derivative = self.kernel * 2 if self.norm == 2 else tf.sign(self.kernel)
-        norms_derivative += np.finfo(np.float32).eps
+            self.lambdas = self.lambdas + self.mu * self.etha * self.rs
 
-        projected = self.theta - tf.reduce_sum(self.lambdas)
-        self.lambdas = tf.add(self.lambdas, projected)
-        self.rs = tf.math.exp(self.lambdas) * norms_derivative
+            norms_derivative = self.kernel * 2 if self.norm == 2 else tf.sign(self.kernel)
+            norms_derivative += np.finfo(np.float32).eps
 
-        self.kernel = self.prev - self.etha(g + self.rs)  # prev not OK
+            projected = self.theta - tf.reduce_mean(self.lambdas)
+            self.lambdas = tf.add(self.lambdas, projected)
 
+            max_lambda_values = tf.math.log(tf.abs(self.kernel / norms_derivative))
+            # self.lambdas = tf.clip_by_norm(self.lambdas, tf.squeeze(max_lambda_values))
+            self.lambdas = tf.clip_by_global_norm(self.lambdas, [10e8])
+
+            self.rs = tf.math.exp(self.lambdas) * norms_derivative
+
+
+            self.kernel = self.prev - self.etha * (g + self.rs)  # prev not OK
+
+        self.first_time = True
         self.prev = tf.identity(self.kernel)
+
         return tf.matmul(input, self.kernel) + self.bias
 
 
