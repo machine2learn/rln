@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 from functools import reduce
+from keras.callbacks import Callback
 
 tf.enable_eager_execution()
 
@@ -20,19 +21,12 @@ class Model(tf.keras.Model):
         result = reduce(lambda acc, layer: layer(acc), self.dense, input)
         return result
 
-    def set_prediction(self):
+    def back(self):
         for d in self.dense:
-            d.training = False
-
-    def set_training(self):
-        for d in self.dense:
-            d.training = True
-
+            d.back()
 
 def loss(model, inputs, targets):
-    model.set_prediction()
     result = tf.losses.mean_squared_error(targets, model(inputs))
-    model.set_training()
     return result
 
 
@@ -70,38 +64,41 @@ class RLN(tf.keras.layers.Layer):
                                   initializer='zeros',
                                   trainable=False)
 
-        self.prev = self.add_weight(name='prev_kernel',
-                                    shape=[int(input_shape[-1]), self.output_units],
-                                    initializer='zeros',
-                                    trainable=False)
+        # self.prev = self.add_weight(name='prev_kernel',
+        #                             shape=[int(input_shape[-1]), self.output_units],
+        #                             initializer='zeros',
+        #                             trainable=False)
+        #
+
+        self.prev = tf.identity(self.kernel)
+
+        self.first_time = True
+
+
+    def back(self):
+        g = self.kernel - self.prev
+
+        if not self.first_time:
+            self.lambdas = self.lambdas + self.mu * g * self.rs
+
+            projected = self.theta - tf.reduce_mean(self.lambdas)
+            self.lambdas = tf.add(self.lambdas, projected)
+
+
+        norms_derivative = self.kernel * 2 if self.norm == 2 else tf.sign(self.kernel)
+        norms_derivative += np.finfo(np.float32).eps
+
+        max_lambda_values = tf.math.log(tf.abs(self.kernel / norms_derivative))
+        self.lambdas = tf.clip_by_norm(self.lambdas, max_lambda_values)
+
+        self.rs = tf.math.exp(self.lambdas) * norms_derivative
+        self.kernel = self.prev - self.etha * (g / self.etha + self.rs)  # prev not OK
+        self.prev = tf.identity(self.kernel)
 
         self.first_time = False
 
-        self.training = True
 
     def call(self, input, **kwargs):
-        if self.training:
-            if self.first_time:
-                g = self.kernel - self.prev
-
-                self.lambdas = self.lambdas + self.mu * self.etha * self.rs
-
-                norms_derivative = self.kernel * 2 if self.norm == 2 else tf.sign(self.kernel)
-                norms_derivative += np.finfo(np.float32).eps
-
-                projected = self.theta - tf.reduce_mean(self.lambdas)
-                self.lambdas = tf.add(self.lambdas, projected)
-
-                max_lambda_values = tf.math.log(tf.abs(self.kernel / norms_derivative))
-                self.lambdas = tf.clip_by_norm(self.lambdas, max_lambda_values)
-
-                self.rs = tf.math.exp(self.lambdas) * norms_derivative
-
-                self.kernel = self.prev - self.etha * (g + self.rs)  # prev not OK
-
-            self.first_time = True
-            self.prev = tf.identity(self.kernel)
-
         return tf.matmul(input, self.kernel) + self.bias
 
 
@@ -116,18 +113,14 @@ if __name__ == '__main__':
     model = Model([10, 5, 1])
     optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.01)
 
-    for i in range(1000):
+    for i in range(300):
         grads = grad(model, training_inputs, training_outputs)
-        # prev = [tf.identity(i) for i in model.variables]
-        # prev = model.get_weights()
         optimizer.apply_gradients(zip(grads, model.variables), global_step=tf.train.get_or_create_global_step())
-        # model.set_weights(prev)
-        # model.
+        model.back()
+
         if i % 20 == 0:
             print("Loss at step {:03d}: {:.3f}".format(i, loss(model, training_inputs, training_outputs)))
 
     print("Final loss: {:.3f}".format(loss(model, training_inputs, training_outputs)))
-
-    model.set_prediction()
 
     print(model([[12.0], [14.0], [5.0]], training=False))
