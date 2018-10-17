@@ -14,19 +14,25 @@ class Model(tf.keras.Model):
     def __init__(self, hidden_units):
         super().__init__()
 
-        # self.dense = [tf.keras.layers.Dense(units=units) for units in hidden_units]
-        # self.dense = [RLN(hidden_units[0])] + [tf.keras.layers.Dense(units) for units in hidden_units[1:]]
+        # self.dense = [tf.keras.layers.Dense(units=units, activation='relu') for units in hidden_units]
 
-        self.dense = [RLN(units) for units in hidden_units]
+        # self.dense = [tf.keras.layers.Dense(units=units, activation='relu') for units in hidden_units[:-1]]
+        # self.dense.append(tf.keras.layers.Dense(units=1, activation='linear'))
+
+        self.dense = [RLN(hidden_units[0])] + [tf.keras.layers.Dense(units, activation='relu') for units in hidden_units[1:-1]]
+        self.dense.append(tf.keras.layers.Dense(units=1, activation='linear'))
+
+        # self.dense = [RLN(units) for units in hidden_units]
 
     def call(self, input, **kwargs):
         result = reduce(lambda acc, layer: layer(acc), self.dense, input)
         return result
 
-    def back(self):
-        for d in self.dense:
-            if type(d) == RLN:
-                d.back()
+    # def back(self):
+        # for d in self.dense:
+            # if type(d) == RLN:
+            #     d.back()
+
 
 def loss(model, inputs, targets):
     result = tf.losses.mean_squared_error(targets, model(inputs))
@@ -71,7 +77,6 @@ class RLN(tf.keras.layers.Layer):
 
         self.first_time = True
 
-
     def back(self):
         g = self.kernel - self.prev
 
@@ -82,7 +87,7 @@ class RLN(tf.keras.layers.Layer):
             self.lambdas = tf.add(self.lambdas, projected)
 
         norms_derivative = self.kernel * 2 if self.norm == 2 else tf.sign(self.kernel)
-        norms_derivative += np.finfo(np.float32).eps
+        # norms_derivative += np.finfo(np.float32).eps
 
         max_lambda_values = tf.math.log(tf.abs(self.kernel / norms_derivative))
         max = tf.reduce_max(self.lambdas)
@@ -98,27 +103,30 @@ class RLN(tf.keras.layers.Layer):
         self.first_time = False
 
     def call(self, input, **kwargs):
-        return tf.matmul(input, self.kernel) + self.bias
+        return tf.keras.activations.tanh(tf.matmul(input, self.kernel) + self.bias)
 
 
 def generate(input):
-    return input * 3 + 2
+    # return input * input * 3 + 2
+    return input * input * 3 + 2
+
 
 # A toy dataset of points around 3 * x + 2
 NUM_EXAMPLES = 10000
-training_inputs = tf.random_normal([NUM_EXAMPLES, 1])
+training_inputs = tf.random_normal([NUM_EXAMPLES, 1], 10, 10)
 noise = tf.random_normal([NUM_EXAMPLES, 1])
 training_outputs = generate(training_inputs)
 # training_outputs = training_inputs * 3 + 2 + noise
 
 if __name__ == '__main__':
-    model = Model([10, 5, 1])
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.01)
+    model = Model([175, 50, 1])
+    # optimizer = tf.train.GradientDescentOptimizer(learning_rate=1e-6)
+    optimizer = tf.train.AdamOptimizer(learning_rate=1e-2)
 
-    for i in range(1000):
+    for i in range(2000):
         grads = grad(model, training_inputs, training_outputs)
         optimizer.apply_gradients(zip(grads, model.variables), global_step=tf.train.get_or_create_global_step())
-        model.back()
+        # model.back()
 
         if i % 20 == 0:
             print("Loss at step {:03d}: {:.3f}".format(i, loss(model, training_inputs, training_outputs)))
