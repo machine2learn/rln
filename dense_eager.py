@@ -28,10 +28,10 @@ class Model(tf.keras.Model):
         result = reduce(lambda acc, layer: layer(acc), self.dense, input)
         return result
 
-    # def back(self):
-        # for d in self.dense:
-            # if type(d) == RLN:
-            #     d.back()
+    def back(self):
+        for d in self.dense:
+            if type(d) == RLN:
+                d.back()
 
 
 def loss(model, inputs, targets):
@@ -126,7 +126,7 @@ if __name__ == '__main__':
     for i in range(2000):
         grads = grad(model, training_inputs, training_outputs)
         optimizer.apply_gradients(zip(grads, model.variables), global_step=tf.train.get_or_create_global_step())
-        # model.back()
+        model.back()
 
         if i % 20 == 0:
             print("Loss at step {:03d}: {:.3f}".format(i, loss(model, training_inputs, training_outputs)))
