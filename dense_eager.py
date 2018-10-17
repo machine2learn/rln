@@ -83,10 +83,14 @@ class RLN(tf.keras.layers.Layer):
         norms_derivative += np.finfo(np.float32).eps
 
         max_lambda_values = tf.math.log(tf.abs(self.kernel / norms_derivative))
+        max = tf.reduce_max(self.lambdas)
+        max_lambda_values = tf.where(tf.is_nan(max_lambda_values),
+                                     tf.ones_like(max_lambda_values) * max,
+                                     max_lambda_values)
         self.lambdas = tf.clip_by_norm(self.lambdas, max_lambda_values)
 
         self.rs = tf.math.exp(self.lambdas) * norms_derivative
-        tf.keras.backend.set_value(self.kernel, self.prev - self.etha * (g / self.etha + self.rs))
+        tf.keras.backend.set_value(self.kernel, self.kernel - self.etha * self.rs + g)
         self.prev = tf.identity(self.kernel)
 
         self.first_time = False
@@ -95,16 +99,16 @@ class RLN(tf.keras.layers.Layer):
     def call(self, input, **kwargs):
         return tf.matmul(input, self.kernel) + self.bias
 
-
+ue
 # A toy dataset of points around 3 * x + 2
-NUM_EXAMPLES = 2000
+NUM_EXAMPLES = 10000
 training_inputs = tf.random_normal([NUM_EXAMPLES, 1])
 noise = tf.random_normal([NUM_EXAMPLES, 1])
-training_outputs = training_inputs * 3 + 2
+training_outputs = training_inputs * 6 + 4
 # training_outputs = training_inputs * 3 + 2 + noise
 
 if __name__ == '__main__':
-    model = Model([10, 5, 1])
+    model = Model([10, 1])
     optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.01)
 
     for i in range(300):
@@ -117,4 +121,5 @@ if __name__ == '__main__':
 
     print("Final loss: {:.3f}".format(loss(model, training_inputs, training_outputs)))
 
-    print(model([[12.0], [14.0], [5.0]], training=False))
+    print(model([[12.0], [14.0], [5.0], [4.0], [42.0]]))
+    print(np.array([12.0, 14.0, 5.0, 4.0, 42.0]) * 6 + 4)
