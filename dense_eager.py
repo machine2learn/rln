@@ -20,9 +20,20 @@ class Model(tf.keras.Model):
         result = reduce(lambda acc, layer: layer(acc), self.dense, input)
         return result
 
+    def set_prediction(self):
+        for d in self.dense:
+            d.training = False
+
+    def set_training(self):
+        for d in self.dense:
+            d.training = True
+
 
 def loss(model, inputs, targets):
-    return tf.losses.mean_squared_error(targets, model(inputs))
+    model.set_prediction()
+    result = tf.losses.mean_squared_error(targets, model(inputs))
+    model.set_training()
+    return result
 
 
 def grad(model, inputs, targets):
@@ -36,7 +47,7 @@ class RLN(tf.keras.layers.Layer):
     def __init__(self, output_units):
         super().__init__()
         self.output_units = output_units
-        self.theta = -8
+        self.theta = -12
         self.norm = 2
         self.etha = 0.01
         self.mu = 10e6
@@ -47,9 +58,11 @@ class RLN(tf.keras.layers.Layer):
 
         self.bias = self.add_variable('bias', [self.output_units])
 
+        lambdas_initializer = tf.constant_initializer(self.theta * np.ones([int(input_shape[-1]), self.output_units]))
+
         self.lambdas = self.add_weight(name='lambdas',
-                                       shape=([self.output_units]),
-                                       initializer='he_normal',
+                                       shape=([int(input_shape[-1]), self.output_units]),
+                                       initializer=lambdas_initializer,
                                        trainable=False)
 
         self.rs = self.add_weight(name='rs',
@@ -64,29 +77,30 @@ class RLN(tf.keras.layers.Layer):
 
         self.first_time = False
 
+        self.training = True
+
     def call(self, input, **kwargs):
-        if self.first_time:
-            g = self.kernel - self.prev
+        if self.training:
+            if self.first_time:
+                g = self.kernel - self.prev
 
-            self.lambdas = self.lambdas + self.mu * self.etha * self.rs
+                self.lambdas = self.lambdas + self.mu * self.etha * self.rs
 
-            norms_derivative = self.kernel * 2 if self.norm == 2 else tf.sign(self.kernel)
-            norms_derivative += np.finfo(np.float32).eps
+                norms_derivative = self.kernel * 2 if self.norm == 2 else tf.sign(self.kernel)
+                norms_derivative += np.finfo(np.float32).eps
 
-            projected = self.theta - tf.reduce_mean(self.lambdas)
-            self.lambdas = tf.add(self.lambdas, projected)
+                projected = self.theta - tf.reduce_mean(self.lambdas)
+                self.lambdas = tf.add(self.lambdas, projected)
 
-            max_lambda_values = tf.math.log(tf.abs(self.kernel / norms_derivative))
-            # self.lambdas = tf.clip_by_norm(self.lambdas, tf.squeeze(max_lambda_values))
-            self.lambdas = tf.clip_by_global_norm(self.lambdas, [10e8])
+                max_lambda_values = tf.math.log(tf.abs(self.kernel / norms_derivative))
+                self.lambdas = tf.clip_by_norm(self.lambdas, max_lambda_values)
 
-            self.rs = tf.math.exp(self.lambdas) * norms_derivative
+                self.rs = tf.math.exp(self.lambdas) * norms_derivative
 
+                self.kernel = self.prev - self.etha * (g + self.rs)  # prev not OK
 
-            self.kernel = self.prev - self.etha * (g + self.rs)  # prev not OK
-
-        self.first_time = True
-        self.prev = tf.identity(self.kernel)
+            self.first_time = True
+            self.prev = tf.identity(self.kernel)
 
         return tf.matmul(input, self.kernel) + self.bias
 
@@ -102,7 +116,7 @@ if __name__ == '__main__':
     model = Model([10, 5, 1])
     optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.01)
 
-    for i in range(300):
+    for i in range(1000):
         grads = grad(model, training_inputs, training_outputs)
         # prev = [tf.identity(i) for i in model.variables]
         # prev = model.get_weights()
@@ -113,4 +127,7 @@ if __name__ == '__main__':
             print("Loss at step {:03d}: {:.3f}".format(i, loss(model, training_inputs, training_outputs)))
 
     print("Final loss: {:.3f}".format(loss(model, training_inputs, training_outputs)))
-    print(model([[12.0], [14.0], [5.0]]))
+
+    model.set_prediction()
+
+    print(model([[12.0], [14.0], [5.0]], training=False))
