@@ -100,11 +100,14 @@ class RLN(tf.keras.layers.Layer):
         return tf.matmul(input, self.kernel) + self.bias
 
 
+def generate(input):
+    return input * 16 + 4
+
 # A toy dataset of points around 3 * x + 2
 NUM_EXAMPLES = 10000
 training_inputs = tf.random_normal([NUM_EXAMPLES, 1])
 noise = tf.random_normal([NUM_EXAMPLES, 1])
-training_outputs = training_inputs * 6 + 4
+training_outputs = generate(training_inputs)
 # training_outputs = training_inputs * 3 + 2 + noise
 
 if __name__ == '__main__':
@@ -122,4 +125,4 @@ if __name__ == '__main__':
     print("Final loss: {:.3f}".format(loss(model, training_inputs, training_outputs)))
 
     print(model([[12.0], [14.0], [5.0], [4.0], [42.0]]))
-    print(np.array([12.0, 14.0, 5.0, 4.0, 42.0]) * 6 + 4)
+    print(generate(np.array([12.0, 14.0, 5.0, 4.0, 42.0])))
