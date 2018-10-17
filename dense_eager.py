@@ -15,6 +15,8 @@ class Model(tf.keras.Model):
         super().__init__()
 
         # self.dense = [tf.keras.layers.Dense(units=units) for units in hidden_units]
+        # self.dense = [RLN(hidden_units[0])] + [tf.keras.layers.Dense(units) for units in hidden_units[1:]]
+
         self.dense = [RLN(units) for units in hidden_units]
 
     def call(self, input, **kwargs):
@@ -23,7 +25,8 @@ class Model(tf.keras.Model):
 
     def back(self):
         for d in self.dense:
-            d.back()
+            if type(d) == RLN:
+                d.back()
 
 def loss(model, inputs, targets):
     result = tf.losses.mean_squared_error(targets, model(inputs))
@@ -73,11 +76,10 @@ class RLN(tf.keras.layers.Layer):
         g = self.kernel - self.prev
 
         if not self.first_time:
-            self.lambdas = self.lambdas + self.mu * g * self.rs
+            self.lambdas = self.lambdas - self.mu * g * self.rs
 
             projected = self.theta - tf.reduce_mean(self.lambdas)
             self.lambdas = tf.add(self.lambdas, projected)
-
 
         norms_derivative = self.kernel * 2 if self.norm == 2 else tf.sign(self.kernel)
         norms_derivative += np.finfo(np.float32).eps
@@ -90,18 +92,17 @@ class RLN(tf.keras.layers.Layer):
         self.lambdas = tf.clip_by_norm(self.lambdas, max_lambda_values)
 
         self.rs = tf.math.exp(self.lambdas) * norms_derivative
-        tf.keras.backend.set_value(self.kernel, self.kernel - self.etha * self.rs + g)
+        tf.keras.backend.set_value(self.kernel, self.kernel - self.etha * self.rs)
         self.prev = tf.identity(self.kernel)
 
         self.first_time = False
-
 
     def call(self, input, **kwargs):
         return tf.matmul(input, self.kernel) + self.bias
 
 
 def generate(input):
-    return input * 16 + 4
+    return input * 3 + 2
 
 # A toy dataset of points around 3 * x + 2
 NUM_EXAMPLES = 10000
@@ -111,10 +112,10 @@ training_outputs = generate(training_inputs)
 # training_outputs = training_inputs * 3 + 2 + noise
 
 if __name__ == '__main__':
-    model = Model([10, 1])
+    model = Model([10, 5, 1])
     optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.01)
 
-    for i in range(300):
+    for i in range(1000):
         grads = grad(model, training_inputs, training_outputs)
         optimizer.apply_gradients(zip(grads, model.variables), global_step=tf.train.get_or_create_global_step())
         model.back()
