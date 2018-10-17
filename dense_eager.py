@@ -99,7 +99,7 @@ class RLN(tf.keras.layers.Layer):
     def call(self, input, **kwargs):
         return tf.matmul(input, self.kernel) + self.bias
 
-ue
+
 # A toy dataset of points around 3 * x + 2
 NUM_EXAMPLES = 10000
 training_inputs = tf.random_normal([NUM_EXAMPLES, 1])
