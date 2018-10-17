@@ -44,7 +44,7 @@ class RLN(tf.keras.layers.Layer):
         self.theta = -12
         self.norm = 2
         self.etha = 0.01
-        self.mu = 10e6
+        self.mu = 1e6
 
     def build(self, input_shape):
         self.kernel = self.add_variable(
@@ -63,12 +63,6 @@ class RLN(tf.keras.layers.Layer):
                                   shape=([self.output_units]),
                                   initializer='zeros',
                                   trainable=False)
-
-        # self.prev = self.add_weight(name='prev_kernel',
-        #                             shape=[int(input_shape[-1]), self.output_units],
-        #                             initializer='zeros',
-        #                             trainable=False)
-        #
 
         self.prev = tf.identity(self.kernel)
 
@@ -92,7 +86,7 @@ class RLN(tf.keras.layers.Layer):
         self.lambdas = tf.clip_by_norm(self.lambdas, max_lambda_values)
 
         self.rs = tf.math.exp(self.lambdas) * norms_derivative
-        self.kernel = self.prev - self.etha * (g / self.etha + self.rs)  # prev not OK
+        tf.keras.backend.set_value(self.kernel, self.prev - self.etha * (g / self.etha + self.rs))
         self.prev = tf.identity(self.kernel)
 
         self.first_time = False
