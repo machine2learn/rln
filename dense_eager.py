@@ -15,16 +15,6 @@ class Model(tf.keras.Model):
     def __init__(self, hidden_units, rln_layers, activation):
         super().__init__()
 
-        # self.dense = [tf.keras.layers.Dense(units=units, activation='relu') for units in hidden_units]
-
-        # self.dense = [tf.keras.layers.Dense(units=units, activation='relu') for units in hidden_units[:-1]]
-        # self.dense.append(tf.keras.layers.Dense(units=1, activation='linear'))
-
-        # self.dense = [RLN(hidden_units[0])] + [Dense(units, activation='relu') for units in hidden_units[1:-1]]
-        # self.dense.append(tf.keras.layers.Dense(units=1, activation='linear'))
-
-        # self.dense = [RLN(units) for units in hidden_units]
-
         self.dense = []
         for i, units in enumerate(hidden_units):
             if i in rln_layers:
@@ -35,10 +25,7 @@ class Model(tf.keras.Model):
         self.dense.append(Dense(units=1, activation='linear'))
 
     def call(self, input, **kwargs):
-        # result = reduce(lambda acc, layer: layer(acc), self.dense, input)
-        result = self.dense[0](input)
-        for d in self.dense[1:]:
-            result = d(result)
+        result = reduce(lambda acc, layer: layer(acc), self.dense, input)
         return result
 
     def back(self):
@@ -132,7 +119,7 @@ training_outputs = generate(training_inputs)
 # training_outputs = training_inputs * 3 + 2 + noise
 
 if __name__ == '__main__':
-    model = Model([175, 50, 50], [], 'relu')
+    model = Model([175, 50, 50], [0, 1], 'relu')
     # optimizer = tf.train.GradientDescentOptimizer(learning_rate=1e-6)
     optimizer = tf.train.AdamOptimizer(learning_rate=1e-2)
 
@@ -143,6 +130,8 @@ if __name__ == '__main__':
 
         if i % 20 == 0:
             print("Loss at step {:03d}: {:.3f}".format(i, loss(model, training_inputs, training_outputs)))
+            if loss(model, training_inputs, training_outputs) < 20:
+                break
 
     print("Final loss: {:.3f}".format(loss(model, training_inputs, training_outputs)))
 
