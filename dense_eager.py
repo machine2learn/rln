@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 from functools import reduce
 from keras.callbacks import Callback
+from tensorflow.python.keras.layers import Activation, Dense
 
 tf.enable_eager_execution()
 
@@ -11,7 +12,7 @@ np.random.seed(42)
 
 class Model(tf.keras.Model):
 
-    def __init__(self, hidden_units):
+    def __init__(self, hidden_units, rln_layers, activation):
         super().__init__()
 
         # self.dense = [tf.keras.layers.Dense(units=units, activation='relu') for units in hidden_units]
@@ -19,13 +20,25 @@ class Model(tf.keras.Model):
         # self.dense = [tf.keras.layers.Dense(units=units, activation='relu') for units in hidden_units[:-1]]
         # self.dense.append(tf.keras.layers.Dense(units=1, activation='linear'))
 
-        self.dense = [RLN(hidden_units[0])] + [tf.keras.layers.Dense(units, activation='relu') for units in hidden_units[1:-1]]
-        self.dense.append(tf.keras.layers.Dense(units=1, activation='linear'))
+        # self.dense = [RLN(hidden_units[0])] + [Dense(units, activation='relu') for units in hidden_units[1:-1]]
+        # self.dense.append(tf.keras.layers.Dense(units=1, activation='linear'))
 
         # self.dense = [RLN(units) for units in hidden_units]
 
+        self.dense = []
+        for i, units in enumerate(hidden_units):
+            if i in rln_layers:
+                self.dense.append(RLN(units))
+                self.dense.append(Activation(activation))
+            else:
+                self.dense.append(Dense(units=units, activation=activation))
+        self.dense.append(Dense(units=1, activation='linear'))
+
     def call(self, input, **kwargs):
-        result = reduce(lambda acc, layer: layer(acc), self.dense, input)
+        # result = reduce(lambda acc, layer: layer(acc), self.dense, input)
+        result = self.dense[0](input)
+        for d in self.dense[1:]:
+            result = d(result)
         return result
 
     def back(self):
@@ -103,7 +116,7 @@ class RLN(tf.keras.layers.Layer):
         self.first_time = False
 
     def call(self, input, **kwargs):
-        return tf.keras.activations.tanh(tf.matmul(input, self.kernel) + self.bias)
+        return tf.matmul(input, self.kernel) + self.bias
 
 
 def generate(input):
@@ -119,7 +132,7 @@ training_outputs = generate(training_inputs)
 # training_outputs = training_inputs * 3 + 2 + noise
 
 if __name__ == '__main__':
-    model = Model([175, 50, 1])
+    model = Model([175, 50, 50], [], 'relu')
     # optimizer = tf.train.GradientDescentOptimizer(learning_rate=1e-6)
     optimizer = tf.train.AdamOptimizer(learning_rate=1e-2)
 
