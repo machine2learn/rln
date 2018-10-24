@@ -107,7 +107,6 @@ class RLN(tf.keras.layers.Layer):
 
 
 def generate(input):
-    # return input * input * 3 + 2
     return input * input * 3 + 2
 
 
@@ -119,11 +118,11 @@ training_outputs = generate(training_inputs)
 # training_outputs = training_inputs * 3 + 2 + noise
 
 if __name__ == '__main__':
-    model = Model([175, 50, 50], [0, 1], 'relu')
+    model = Model([175], [0], 'relu')
     # optimizer = tf.train.GradientDescentOptimizer(learning_rate=1e-6)
     optimizer = tf.train.AdamOptimizer(learning_rate=1e-2)
 
-    for i in range(2000):
+    for i in range(20000):
         grads = grad(model, training_inputs, training_outputs)
         optimizer.apply_gradients(zip(grads, model.variables), global_step=tf.train.get_or_create_global_step())
         model.back()
